@@ -890,7 +890,7 @@ public final class SpigotReflectionUtil {
     }
 
     public static int getBlockDataCombinedId(MaterialData materialData) {
-        // TODO: Add 1.7.10 support
+        // Legacy (1.7.10 - 1.12.2) uses id << 4 | data
         // TODO: Finish adding 1.13+ support
         int combinedID;
         if (PacketEvents.getAPI().getServerManager().getVersion().isNewerThanOrEquals(ServerVersion.V_1_13)) {
@@ -912,6 +912,17 @@ public final class SpigotReflectionUtil {
     }
 
     public static MaterialData getBlockDataByCombinedId(int combinedID) {
+        ServerVersion version = PacketEvents.getAPI().getServerManager().getVersion();
+        if (version.isOlderThan(ServerVersion.V_1_13)) {
+            int typeId = combinedID >> 4;
+            byte data = (byte) (combinedID & 0xF);
+            Material material = Material.getMaterial(typeId);
+            if (material == null) {
+                material = Material.AIR;
+            }
+            return new MaterialData(material, data);
+        }
+
         Object iBlockDataObj = null;
         try {
             iBlockDataObj = GET_BY_COMBINED_ID.invoke(null, combinedID);
@@ -921,6 +932,9 @@ public final class SpigotReflectionUtil {
 
         try {
             Class<?> blockData = Reflection.getClassByNameWithoutException("org.bukkit.block.data.BlockData");
+            if (blockData == null) {
+                return null;
+            }
             Object bd = (blockData.cast(GET_CRAFT_BLOCK_DATA_FROM_IBLOCKDATA.invoke(null, iBlockDataObj)));
             Method materialMethod = Reflection.getMethod(blockData, Material.class, 0);
             return new MaterialData((Material) materialMethod.invoke(bd));
